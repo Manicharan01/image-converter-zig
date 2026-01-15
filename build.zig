@@ -9,6 +9,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const jpeg = b.addModule("myConverter", .{
+        .root_source_file = b.path("src/jpeg_buffer/root.zig"),
+        .target = target,
+    });
+
     const exe = b.addExecutable(.{
         .name = "myConverter",
         .root_module = b.createModule(.{
@@ -17,10 +22,13 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "png_parser", .module = mod },
+                .{ .name = "jpeg_buffer", .module = jpeg },
             },
         }),
     });
 
+    exe.linkLibC();
+    exe.linkSystemLibrary("z");
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");
