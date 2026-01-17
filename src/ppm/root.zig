@@ -1,4 +1,7 @@
 const std = @import("std");
+const zlib = @cImport({
+    @cInclude("zlib.h");
+});
 
 pub fn example() void {
     std.debug.print("Hello from PPM module\n", .{});
@@ -60,9 +63,63 @@ pub const PPMHeader = struct {
             try pngBuffer.appendSlice(self.allocator, scanline);
             i += 1;
         }
+
+        const input = pngBuffer.items;
+        var out_buffer: [1024 * 1024]u8 = undefined;
+
+        var strm: zlib.z_stream = undefined;
+
+        strm.zalloc = null;
+        strm.zfree = null;
+        strm.@"opaque" = null;
+
+        const init_ret = zlib.deflateInit(&strm, zlib.Z_DEFAULT_COMPRESSION);
+        if (init_ret != zlib.Z_OK) {
+            std.debug.print("Failed to initialize zlib: {d}\n", .{init_ret});
+        }
+        defer _ = zlib.deflateEnd(&strm);
+
+        strm.next_in = @constCast(input.ptr);
+        strm.avail_in = @intCast(input.len);
+
+        strm.next_out = &out_buffer;
+        strm.avail_out = @intCast(out_buffer.len);
+
+        const def_ret = zlib.deflate(&strm, zlib.Z_FINISH);
+
+        if (def_ret != zlib.Z_STREAM_END) {
+            std.debug.print("Compression failed or buffer too small. Error: {d}\n", .{def_ret});
+            return;
+        }
+
+        const compressed_size = strm.total_out;
+        const compressed_slice = out_buffer[0..compressed_size];
+
+        var IDATLengthInBytes: [4]u8 = undefined;
+        std.mem.writeInt(u32, &IDATLengthInBytes, @as(u32, @intCast(compressed_slice.len)), .big);
+
+        const IDATInHex = "49444154";
+        var buffer: [32]u8 = undefined;
+        const IDATInBytes = try std.fmt.hexToBytes(&buffer, IDATInHex);
+
+        const IDATAndData = try std.mem.concat(self.allocator, u8, &.{ IDATInBytes, compressed_slice });
+        const checksum = std.hash.Crc32.hash(IDATAndData);
+        var checksumInBytes: [4]u8 = undefined;
+        std.mem.writeInt(u32, &checksumInBytes, checksum, .big);
+
+        const pngSignatureANdIHDRChunk = try self.getPNGSignatureAndIHDRInBytes();
+        const IDATChunk = try std.mem.concat(self.allocator, u8, &.{ &IDATLengthInBytes, IDATAndData, &checksumInBytes });
+        const IENDChunk = try self.getIENDChunk();
+
+        const wholeData = try std.mem.concat(self.allocator, u8, &.{ pngSignatureANdIHDRChunk, IDATChunk, IENDChunk });
+
+        const file = try std.fs.cwd().createFile("output.png", .{});
+        defer file.close();
+
+        try file.writeAll(wholeData);
     }
 
-    pub fn getPNGSignatureAndIHDRInBytes(self: *Self) ![]u8 {
+    fn getPNGSignatureAndIHDRInBytes(self: *Self) ![]u8 {
         const pngSignatureInHex = "89504E470D0A1A0A";
         var buffer: [32]u8 = undefined;
         const pngSignatureBytes = try std.fmt.hexToBytes(&buffer, pngSignatureInHex);
@@ -91,7 +148,24 @@ pub const PPMHeader = struct {
         var checksumInBytes: [4]u8 = undefined;
         std.mem.writeInt(u32, &checksumInBytes, checksum, .big);
 
-        const bytes = try std.mem.concat(self.allocator, u8, &.{ pngSignatureBytes, IHDRLengthInBytes, IHDRAndData, checksumInBytes });
+        const bytes = try std.mem.concat(self.allocator, u8, &.{ pngSignatureBytes, IHDRLengthInBytes, IHDRAndData, &checksumInBytes });
+
+        return bytes;
+    }
+
+    fn getIENDChunk(self: *Self) ![]u8 {
+        const IENDLengthInHex = "00000000";
+        var buffer: [32]u8 = undefined;
+        const IENDLengthInBytes = try std.fmt.hexToBytes(&buffer, IENDLengthInHex);
+
+        const IENDInHex = "49454E44";
+        var buffer1: [32]u8 = undefined;
+        const IENDInBytes = try std.fmt.hexToBytes(&buffer1, IENDInHex);
+
+        const CRCInHex = "AE426082";
+        var buffer2: [32]u8 = undefined;
+        const CRCInBytes = try std.fmt.hexToBytes(&buffer2, CRCInHex);
+        const bytes = try std.mem.concat(self.allocator, u8, &.{ IENDLengthInBytes, IENDInBytes, CRCInBytes });
 
         return bytes;
     }
