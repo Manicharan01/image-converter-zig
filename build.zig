@@ -14,6 +14,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const ppm = b.addModule("myConverter", .{
+        .root_source_file = b.path("src/ppm/root.zig"),
+        .target = target,
+    });
+
     const exe = b.addExecutable(.{
         .name = "myConverter",
         .root_module = b.createModule(.{
@@ -23,6 +28,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "png_parser", .module = mod },
                 .{ .name = "jpeg_buffer", .module = jpeg },
+                .{ .name = "ppm", .module = ppm },
             },
         }),
     });
