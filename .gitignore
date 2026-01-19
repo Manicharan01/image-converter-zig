@@ -1,2 +1,8 @@
-zig-out
-.zig-cache
+zig-out/
+.zig-cache/
+zig-cache/
+*.bin
+*.png
+*.jpg
+*.jpeg
+*.ppm
