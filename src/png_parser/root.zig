@@ -286,69 +286,93 @@ pub const PNGDecode = struct {
             else => return error.UnsupportedColorType,
         }
 
-        // 4. Iterate Padded Grid
-        var row: u32 = 0;
-        while (row < p_height) : (row += 1) {
-            var col: u32 = 0;
-            while (col < p_width) : (col += 1) {
-
-                // Clamp coordinates to valid image area
-                const src_x = @min(col, h.width - 1);
-                const src_y = @min(row, h.height - 1);
-                // Calculate index in the SOURCE buffer
-                const idx = (src_y * h.width * bpp) + (src_x * bpp);
-
-                var r: f32 = 0;
-                var g: f32 = 0;
-                var b: f32 = 0;
-
-                // --- EXTRACTION LOGIC ---
-                switch (h.colorType) {
-                    0, 4 => {
-                        // Grayscale (Type 0) or Gray+Alpha (Type 4)
-                        // We only read the first byte. Ignore Alpha (byte 2) if present.
+        // 4. Extraction and Conversion Logic
+        switch (h.colorType) {
+            0, 4 => { // Grayscale or Gray+Alpha
+                var row: u32 = 0;
+                while (row < p_height) : (row += 1) {
+                    var col: u32 = 0;
+                    while (col < p_width) : (col += 1) {
+                        const src_x = @min(col, h.width - 1);
+                        const src_y = @min(row, h.height - 1);
+                        const idx = (src_y * h.width * bpp) + (src_x * bpp);
                         const val = @as(f32, @floatFromInt(raw_pixels[idx]));
-                        r = val;
-                        g = val;
-                        b = val;
-                    },
-                    2, 6 => {
-                        // RGB (Type 2) or RGBA (Type 6)
-                        r = @as(f32, @floatFromInt(raw_pixels[idx]));
-                        g = @as(f32, @floatFromInt(raw_pixels[idx + 1]));
-                        b = @as(f32, @floatFromInt(raw_pixels[idx + 2]));
-                    },
-                    3 => {
-                        // Palette / Indexed (Type 3)
-                        // The byte is an index. We must look it up in the palette.
-                        if (self.palette) |pal| {
-                            const palette_idx = @as(usize, raw_pixels[idx]) * 3; // Palette is RGB, RGB...
-                            // Safety check in case palette is too small
+                        const r = val;
+                        const g = val;
+                        const b = val;
+                        const y = (0.299 * r) + (0.587 * g) + (0.114 * b);
+                        const cb = 128.0 - (0.168736 * r) - (0.331264 * g) + (0.5 * b);
+                        const cr = 128.0 + (0.5 * r) - (0.418688 * g) - (0.081312 * b);
+                        const dst_idx = (row * p_width) + col;
+                        y_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, y))));
+                        cb_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cb))));
+                        cr_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cr))));
+                    }
+                }
+            },
+            2, 6 => { // RGB or RGBA
+                var row: u32 = 0;
+                while (row < p_height) : (row += 1) {
+                    var col: u32 = 0;
+                    while (col < p_width) : (col += 1) {
+                        const src_x = @min(col, h.width - 1);
+                        const src_y = @min(row, h.height - 1);
+                        const idx = (src_y * h.width * bpp) + (src_x * bpp);
+                        const r = @as(f32, @floatFromInt(raw_pixels[idx]));
+                        const g = @as(f32, @floatFromInt(raw_pixels[idx + 1]));
+                        const b = @as(f32, @floatFromInt(raw_pixels[idx + 2]));
+                        const y = (0.299 * r) + (0.587 * g) + (0.114 * b);
+                        const cb = 128.0 - (0.168736 * r) - (0.331264 * g) + (0.5 * b);
+                        const cr = 128.0 + (0.5 * r) - (0.418688 * g) - (0.081312 * b);
+                        const dst_idx = (row * p_width) + col;
+                        y_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, y))));
+                        cb_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cb))));
+                        cr_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cr))));
+                    }
+                }
+            },
+            3 => { // Palette / Indexed
+                if (self.palette) |pal| {
+                    var row: u32 = 0;
+                    while (row < p_height) : (row += 1) {
+                        var col: u32 = 0;
+                        while (col < p_width) : (col += 1) {
+                            const src_x = @min(col, h.width - 1);
+                            const src_y = @min(row, h.height - 1);
+                            const idx = (src_y * h.width * bpp) + (src_x * bpp);
+                            const palette_idx = @as(usize, raw_pixels[idx]) * 3;
+                            var r: f32 = 0;
+                            var g: f32 = 0;
+                            var b: f32 = 0;
                             if (palette_idx + 2 < pal.len) {
                                 r = @as(f32, @floatFromInt(pal[palette_idx]));
                                 g = @as(f32, @floatFromInt(pal[palette_idx + 1]));
                                 b = @as(f32, @floatFromInt(pal[palette_idx + 2]));
                             }
-                        } else {
-                            // Missing palette? Default to black to prevent crash
-                            r = 0;
-                            g = 0;
-                            b = 0;
+                            const y = (0.299 * r) + (0.587 * g) + (0.114 * b);
+                            const cb = 128.0 - (0.168736 * r) - (0.331264 * g) + (0.5 * b);
+                            const cr = 128.0 + (0.5 * r) - (0.418688 * g) - (0.081312 * b);
+                            const dst_idx = (row * p_width) + col;
+                            y_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, y))));
+                            cb_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cb))));
+                            cr_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cr))));
                         }
-                    },
-                    else => unreachable,
+                    }
+                } else {
+                    // Handle missing palette: fill with black
+                    var row: u32 = 0;
+                    while (row < p_height) : (row += 1) {
+                        var col: u32 = 0;
+                        while (col < p_width) : (col += 1) {
+                            const dst_idx = (row * p_width) + col;
+                            y_plane[dst_idx] = 0;
+                            cb_plane[dst_idx] = 128;
+                            cr_plane[dst_idx] = 128;
+                        }
+                    }
                 }
-
-                // --- CONVERSION LOGIC (Same as before) ---
-                const y = (0.299 * r) + (0.587 * g) + (0.114 * b);
-                const cb = 128.0 - (0.168736 * r) - (0.331264 * g) + (0.5 * b);
-                const cr = 128.0 + (0.5 * r) - (0.418688 * g) - (0.081312 * b);
-
-                const dst_idx = (row * p_width) + col;
-                y_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, y))));
-                cb_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cb))));
-                cr_plane[dst_idx] = @as(u8, @intFromFloat(@min(255.0, @max(0.0, cr))));
-            }
+            },
+            else => unreachable,
         }
 
         return YCbCrImage{
