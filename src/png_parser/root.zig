@@ -47,7 +47,7 @@ pub const YCbCrImage = struct {
 
 pub const PNGDecode = struct {
     allocator: std.mem.Allocator,
-    file_buffer: []u8,
+    file_buffer: ?[]u8,
     cursor: usize,
     header: ?ImageHeader,
     palette: ?[]u8,
@@ -66,27 +66,28 @@ pub const PNGDecode = struct {
             .header = null,
             .palette = null,
             .transparency = null,
-            .compressed_data = std.ArrayList(u8).empty,
+            .compressed_data = std.ArrayList(u8).init(allocator),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.allocator.free(self.file_buffer);
+        if (self.file_buffer) |buf| self.allocator.free(buf);
 
         if (self.palette) |p| self.allocator.free(p);
         if (self.transparency) |t| self.allocator.free(t);
 
-        self.compressed_data.deinit(self.allocator);
+        self.compressed_data.deinit();
     }
 
     pub fn parseHeader(self: *Self) !void {
-        if (!std.mem.eql(u8, self.file_buffer[0..8], PNG_SIGNATURE)) {
+        const file_buf = self.file_buffer orelse return error.NoFileBuffer;
+        if (!std.mem.eql(u8, file_buf[0..8], PNG_SIGNATURE)) {
             return error.InvalidPNGSignature;
         }
         self.cursor += 8;
 
         const ihdr_offset = 16;
-        const buffer = self.file_buffer[ihdr_offset..];
+        const buffer = file_buf[ihdr_offset..];
 
         const width_str = buffer[0..4];
         const height_str = buffer[4..8];
@@ -108,15 +109,26 @@ pub const PNGDecode = struct {
     }
 
     pub fn parseChunks(self: *Self) !void {
-        while (self.cursor < self.file_buffer.len) {
-            const len_bytes = self.file_buffer[self.cursor..][0..4];
+        const file_buf = self.file_buffer orelse return error.NoFileBuffer;
+        while (self.cursor < file_buf.len) {
+            // Ensure we have enough data to read Length (4) and Type (4)
+            if (self.cursor + 8 > file_buf.len) {
+                return error.UnexpectedEndOfFile;
+            }
+
+            const len_bytes = file_buf[self.cursor..][0..4];
             const length = std.mem.readInt(u32, len_bytes, .big);
             self.cursor += 4;
 
-            const chunk_type = self.file_buffer[self.cursor..][0..4];
+            const chunk_type = file_buf[self.cursor..][0..4];
             self.cursor += 4;
 
-            const chunk_data = self.file_buffer[self.cursor..][0..length];
+            // Ensure we have enough data for the chunk + CRC (4 bytes)
+            if (self.cursor + length + 4 > file_buf.len) {
+                return error.UnexpectedEndOfFile;
+            }
+
+            const chunk_data = file_buf[self.cursor..][0..length];
 
             if (std.mem.eql(u8, chunk_type, "PLTE")) {
                 try self.handlePLTE(chunk_data);
@@ -132,6 +144,9 @@ pub const PNGDecode = struct {
 
             self.cursor += length + 4;
         }
+        // Free file buffer as it is no longer needed after parsing all chunks
+        self.allocator.free(file_buf);
+        self.file_buffer = null;
     }
 
     fn handlePLTE(self: *Self, data: []u8) !void {
@@ -145,7 +160,7 @@ pub const PNGDecode = struct {
     }
 
     fn handleIDAT(self: *Self, data: []u8) !void {
-        try self.compressed_data.appendSlice(self.allocator, data);
+        try self.compressed_data.appendSlice(data);
     }
 
     pub fn decompress(self: *Self) ![]u8 {
@@ -183,6 +198,10 @@ pub const PNGDecode = struct {
         if (ret != zlib.Z_STREAM_END and ret != zlib.Z_OK) {
             return error.ZlibDecompressionFailed;
         }
+
+        // Free compressed data as it is no longer needed
+        self.compressed_data.deinit();
+        self.compressed_data = std.ArrayList(u8).init(self.allocator);
 
         return out_buffer;
     }
@@ -380,14 +399,15 @@ pub const PNGEncode = struct {
     pub fn parseToPNG(self: *Self) !void {
         const metadata = self.metadata orelse return error.NoMetadata;
 
-        var pngBuffer = std.ArrayList(u8).empty;
-        defer pngBuffer.deinit(self.allocator);
+        var pngBuffer = std.ArrayList(u8).init(self.allocator);
+        defer pngBuffer.deinit();
 
         var count: u32 = 0;
         var i: usize = 0;
         while (count < metadata.height) : (count += 1) {
             const scanline = try std.mem.concat(self.allocator, u8, &.{ &.{0x00}, metadata.colorCode[i * 3 * metadata.width .. (i + 1) * 3 * metadata.width] });
-            try pngBuffer.appendSlice(self.allocator, scanline);
+            defer self.allocator.free(scanline);
+            try pngBuffer.appendSlice(scanline);
             i += 1;
         }
 

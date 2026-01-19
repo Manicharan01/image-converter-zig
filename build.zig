@@ -21,17 +21,13 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "myConverter",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "png_parser", .module = mod },
-                .{ .name = "jpeg_buffer", .module = jpeg },
-                .{ .name = "ppm", .module = ppm },
-            },
-        }),
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
     });
+    exe.root_module.addImport("png_parser", mod);
+    exe.root_module.addImport("jpeg_buffer", jpeg);
+    exe.root_module.addImport("ppm", ppm);
 
     exe.linkLibC();
     exe.linkSystemLibrary("z");
@@ -49,13 +45,15 @@ pub fn build(b: *std.Build) void {
     }
 
     const mod_tests = b.addTest(.{
-        .root_module = mod,
+        .root_source_file = mod.root_source_file.?,
+        .target = target,
     });
 
     const run_mod_tests = b.addRunArtifact(mod_tests);
 
     const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
+        .root_source_file = exe.root_module.root_source_file.?,
+        .target = target,
     });
 
     const run_exe_tests = b.addRunArtifact(exe_tests);

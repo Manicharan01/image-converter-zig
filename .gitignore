@@ -1,2 +1,9 @@
-zig-out
-.zig-cache
+zig-out/
+.zig-cache/
+zig-cache/
+.DS_Store
+*.bin
+compressed.bin
+python_output.bin
+zig.tar.xz
+zig_install/

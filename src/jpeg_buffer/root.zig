@@ -57,14 +57,14 @@ pub fn writeJpegHeaders(file: std.fs.File, width: u32, height: u32) !void {
 
     // 2. APP0 (JFIF Marker)
     try file.writeAll(&.{ 0xFF, 0xE0 });
-    try file.deprecatedWriter().writeInt(u16, 16, .big); // Length
+    try file.writer().writeInt(u16, 16, .big); // Length
     //
     const jfif = "JFIF\x00";
     try file.writeAll(jfif[0..]); // Identifier
     try file.writeAll(&.{ 0x01, 0x01 }); // Version 1.01
     try file.writeAll(&.{0}); // Density units (none)
-    try file.deprecatedWriter().writeInt(u16, 1, .big); // X density
-    try file.deprecatedWriter().writeInt(u16, 1, .big); // Y density
+    try file.writer().writeInt(u16, 1, .big); // X density
+    try file.writer().writeInt(u16, 1, .big); // Y density
     try file.writeAll(&.{ 0, 0 }); // Thumbnail w, h
 
     // 3. DQT (Define Quantization Tables)
@@ -72,7 +72,7 @@ pub fn writeJpegHeaders(file: std.fs.File, width: u32, height: u32) !void {
 
     // --- Table 0 (Luminance) ---
     try file.writeAll(&.{ 0xFF, 0xDB });
-    try file.deprecatedWriter().writeInt(u16, 67, .big); // Length (2 + 65)
+    try file.writer().writeInt(u16, 67, .big); // Length (2 + 65)
     try file.writeAll(&.{0x00}); // Precision 0 (8-bit), ID 0
 
     // Write Q_LUM in ZigZag order!
@@ -86,7 +86,7 @@ pub fn writeJpegHeaders(file: std.fs.File, width: u32, height: u32) !void {
 
     // --- Table 1 (Chrominance) ---
     try file.writeAll(&.{ 0xFF, 0xDB });
-    try file.deprecatedWriter().writeInt(u16, 67, .big);
+    try file.writer().writeInt(u16, 67, .big);
     try file.writeAll(&.{0x01}); // Precision 0, ID 1
     for (0..64) |i| {
         try file.writeAll(&.{Q_CHROMA[ZIGZAG_ORDER[i]]});
@@ -94,10 +94,10 @@ pub fn writeJpegHeaders(file: std.fs.File, width: u32, height: u32) !void {
 
     // 4. SOF0 (Start of Frame - Baseline DCT)
     try file.writeAll(&.{ 0xFF, 0xC0 });
-    try file.deprecatedWriter().writeInt(u16, 17, .big); // Length (8 + 3*3)
+    try file.writer().writeInt(u16, 17, .big); // Length (8 + 3*3)
     try file.writeAll(&.{8}); // Precision (8 bits)
-    try file.deprecatedWriter().writeInt(u16, @as(u16, @intCast(height)), .big);
-    try file.deprecatedWriter().writeInt(u16, @as(u16, @intCast(width)), .big);
+    try file.writer().writeInt(u16, @as(u16, @intCast(height)), .big);
+    try file.writer().writeInt(u16, @as(u16, @intCast(width)), .big);
     try file.writeAll(&.{3}); // Number of components (Y, Cb, Cr)
 
     // Component 1: Y
@@ -124,7 +124,7 @@ pub fn writeJpegHeaders(file: std.fs.File, width: u32, height: u32) !void {
             try w.writeAll(&.{ 0xFF, 0xC4 });
             // Length = 2 bytes (len) + 1 byte (info) + 16 bytes (bits) + vals.len
             const len = @as(u16, @intCast(2 + 1 + 16 + vals.len));
-            try w.deprecatedWriter().writeInt(u16, len, .big);
+            try w.writer().writeInt(u16, len, .big);
             try w.writeAll(&.{id}); // Table Class/ID
             try w.writeAll(bits);
             try w.writeAll(vals);
@@ -147,7 +147,7 @@ pub fn writeJpegHeaders(file: std.fs.File, width: u32, height: u32) !void {
 
     // 6. SOS (Start of Scan)
     try file.writeAll(&.{ 0xFF, 0xDA });
-    try file.deprecatedWriter().writeInt(u16, 12, .big); // Length (6 + 2*3)
+    try file.writer().writeInt(u16, 12, .big); // Length (6 + 2*3)
     try file.writeAll(&.{3}); // Num components
 
     // Y Component (Use DC Table 0, AC Table 0)

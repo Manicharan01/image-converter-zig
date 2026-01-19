@@ -16,14 +16,13 @@ pub fn main() !void {
 
     const args = std.process.argsAlloc(allocator) catch |err| {
         std.debug.print("Error while allocating memory to arguments: {any}\n", .{err});
-        std.os.linux.exit(1);
+        std.process.exit(1);
     };
-    errdefer std.process.argsFree(allocator, args);
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 3) {
         std.debug.print("Usage: convert <input_file> <output_file>\n", .{});
-        std.os.linux.exit(1);
+        std.process.exit(1);
     } else {
         try converter(allocator, args[1], args[2]);
     }
@@ -31,8 +30,8 @@ pub fn main() !void {
 
 pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filename: []const u8) !void {
     if (std.mem.endsWith(u8, input, ".png")) {
-        var output: []u8 = undefined;
-        defer allocator.free(output);
+        var output: ?[]u8 = null;
+        defer if (output) |o| allocator.free(o);
         var rawImage = try png_parser.PNGDecode.init(allocator, input);
         defer rawImage.deinit();
 
@@ -44,7 +43,7 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
 
         output = try rawImage.unfilter(raw_scanlines);
         if (std.mem.endsWith(u8, output_filename, ".jpg") or std.mem.endsWith(u8, output_filename, ".jpeg")) {
-            var yCbCrImage = try rawImage.convertToYCbCr(output);
+            var yCbCrImage = try rawImage.convertToYCbCr(output.?);
             defer yCbCrImage.deinit();
 
             const y_plane = try png_parser.dct.quantizePlane(allocator, yCbCrImage.y_plane, yCbCrImage.padded_width, yCbCrImage.padded_height, png_parser.dct.Q_LUM);
