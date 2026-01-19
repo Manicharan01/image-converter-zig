@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod = b.addModule("myConverter", .{
+    const png = b.addModule("myConverter", .{
         .root_source_file = b.path("src/png_parser/root.zig"),
         .target = target,
     });
@@ -19,6 +19,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const webp = b.addModule("myConverter", .{
+        .root_source_file = b.path("src/webp/root.zig"),
+        .target = target,
+    });
+
     const exe = b.addExecutable(.{
         .name = "myConverter",
         .root_module = b.createModule(.{
@@ -26,9 +31,10 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "png_parser", .module = mod },
+                .{ .name = "png_parser", .module = png },
                 .{ .name = "jpeg_buffer", .module = jpeg },
                 .{ .name = "ppm", .module = ppm },
+                .{ .name = "webp", .module = webp },
             },
         }),
     });
@@ -49,7 +55,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const mod_tests = b.addTest(.{
-        .root_module = mod,
+        .root_module = png,
     });
 
     const run_mod_tests = b.addRunArtifact(mod_tests);
