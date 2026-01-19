@@ -377,7 +377,7 @@ pub const PNGEncode = struct {
         };
     }
 
-    pub fn parseToPNG(self: *Self) !void {
+    pub fn parseToPNG(self: *Self, output_filename: []const u8) !void {
         const metadata = self.metadata orelse return error.NoMetadata;
 
         var pngBuffer = std.ArrayList(u8).empty;
@@ -440,7 +440,7 @@ pub const PNGEncode = struct {
 
         const wholeData = try std.mem.concat(self.allocator, u8, &.{ pngSignatureANdIHDRChunk, IDATChunk, IENDChunk });
 
-        const file = try std.fs.cwd().createFile("output.png", .{});
+        const file = try std.fs.cwd().createFile(output_filename, .{});
         defer file.close();
 
         try file.writeAll(wholeData);

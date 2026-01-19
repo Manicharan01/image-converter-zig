@@ -18,6 +18,7 @@ pub const PPMHeader = struct {
 
     pub fn init(allocator: std.mem.Allocator, filename: []const u8) !Self {
         const buffer = try std.fs.cwd().readFileAlloc(allocator, filename, 50 * 1024 * 1024);
+        std.debug.print("Opened the file\n", .{});
 
         return .{
             .height = 0,

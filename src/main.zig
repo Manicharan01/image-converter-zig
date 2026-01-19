@@ -60,18 +60,21 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
         }
     } else if (std.mem.endsWith(u8, input, ".ppm")) {
         var imageData = try ppm.PPMHeader.init(allocator, input);
+        std.debug.print("Returned the object\n", .{});
         defer imageData.deinit();
 
         try imageData.parseHeader();
+        std.debug.print("Parded all the headers\n", .{});
 
         if (std.mem.endsWith(u8, output_filename, ".png")) {
+            std.debug.print("Encoding the PNG file\n", .{});
             const metadata = png_parser.PNGMetadata{
                 .height = imageData.height,
                 .width = imageData.width,
                 .colorCode = imageData.image_data,
             };
             var pngEncoder = png_parser.PNGEncode.init(allocator, metadata);
-            try pngEncoder.parseToPNG();
+            try pngEncoder.parseToPNG(output_filename);
         }
     }
 }
