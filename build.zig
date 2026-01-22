@@ -24,6 +24,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const viewer = b.addModule("myConverter", .{
+        .root_source_file = b.path("src/viewer/root.zig"),
+        .target = target,
+    });
+
     const exe = b.addExecutable(.{
         .name = "myConverter",
         .root_module = b.createModule(.{
@@ -35,12 +40,14 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "jpeg_buffer", .module = jpeg },
                 .{ .name = "ppm", .module = ppm },
                 .{ .name = "webp", .module = webp },
+                .{ .name = "viewer", .module = viewer },
             },
         }),
     });
 
     exe.linkLibC();
     exe.linkSystemLibrary("z");
+    exe.linkSystemLibrary("SDL2");
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");

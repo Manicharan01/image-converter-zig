@@ -5,6 +5,22 @@ const zlib = @cImport({
 const png_parser = @import("png_parser");
 const jpeg_buffer = @import("jpeg_buffer");
 const ppm = @import("ppm");
+const webp = @import("webp");
+const viewer = @import("viewer");
+
+// pub fn main() !void {
+//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer _ = gpa.deinit();
+//
+//     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+//
+//     var imageData = try webp.Decode.init(allocator, "input.webp");
+//     defer imageData.deinit();
+//
+//     imageData.getTypeofChunk();
+// }
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -18,7 +34,6 @@ pub fn main() !void {
         std.debug.print("Error while allocating memory to arguments: {any}\n", .{err});
         std.os.linux.exit(1);
     };
-    errdefer std.process.argsFree(allocator, args);
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 3) {
@@ -75,6 +90,28 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
             };
             var pngEncoder = png_parser.PNGEncode.init(allocator, metadata);
             try pngEncoder.parseToPNG(output_filename);
+        }
+    } else if (std.mem.eql(u8, input, "show")) {
+        if (std.mem.endsWith(u8, output_filename, ".png")) {
+            var rawImage = try png_parser.PNGDecode.init(allocator, output_filename);
+            defer rawImage.deinit();
+
+            try rawImage.parseHeader();
+            try rawImage.parseChunks();
+            const header = rawImage.header orelse return error.NoHeader;
+
+            const raw_scanlines = try rawImage.decompress();
+            defer allocator.free(raw_scanlines);
+
+            const output = try rawImage.unfilter(raw_scanlines);
+            defer allocator.free(output);
+            try viewer.show(output, header.width, header.height);
+        } else if (std.mem.endsWith(u8, output_filename, ".ppm")) {
+            var imageData = try ppm.PPMHeader.init(allocator, output_filename);
+            defer imageData.deinit();
+
+            try imageData.parseHeader();
+            try viewer.show(imageData.image_data, imageData.width, imageData.height);
         }
     }
 }
