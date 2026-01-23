@@ -23,8 +23,8 @@ pub fn show(raw_buffer: []u8, width: u32, height: u32) !void {
         while (y < width) : (y += 1) {
             const color = sdl.SDL_MapRGB(surface.?.*.format, @as(sdl.u_int8_t, @intCast(raw_buffer[count])), @as(sdl.u_int8_t, @intCast(raw_buffer[count + 1])), @as(sdl.u_int8_t, @intCast(raw_buffer[count + 2])));
             count += 3;
-            dims.x = @as(c_int, @intCast(x));
-            dims.y = @as(c_int, @intCast(y));
+            dims.y = @as(c_int, @intCast(x));
+            dims.x = @as(c_int, @intCast(y));
             _ = sdl.SDL_FillRect(surface, &dims, color);
         }
     }

@@ -72,6 +72,10 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
             defer allocator.free(cb_plane);
 
             try jpeg_buffer.writeJpegFile(output_filename, yCbCrImage.padded_width, yCbCrImage.padded_height, y_plane, cb_plane, cr_plane);
+        } else if (std.mem.endsWith(u8, output_filename, ".ppm")) {
+            const header = rawImage.header orelse return error.NoHeader;
+            var ppm_encoder = ppm.Encode.init(allocator, output, header.height, header.width);
+            try ppm_encoder.writeToFile(output_filename);
         }
     } else if (std.mem.endsWith(u8, input, ".ppm")) {
         var imageData = try ppm.PPMHeader.init(allocator, input);
