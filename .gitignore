@@ -6,3 +6,4 @@ zig-cache/
 *.jpg
 *.jpeg
 *.ppm
+*.webp

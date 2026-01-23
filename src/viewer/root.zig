@@ -5,31 +5,16 @@ const sdl = @cImport({
 });
 
 pub fn show(raw_buffer: []u8, width: u32, height: u32) !void {
-    const window = sdl.SDL_CreateWindow("Image Viewer", @as(c_int, @intCast(0)), @as(c_int, @intCast(0)), @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 0);
+    const window = sdl.SDL_CreateWindow("Image Viewer", @as(c_int, @intCast(0)), @as(c_int, @intCast(0)), @as(c_int, @intCast(1280)), @as(c_int, @intCast(720)), 0);
+    defer sdl.SDL_DestroyWindow(window);
 
-    const surface = sdl.SDL_GetWindowSurface(&window.?.*);
+    const renderer = sdl.SDL_CreateRenderer(window, -1, sdl.SDL_RENDERER_ACCELERATED);
+    defer sdl.SDL_DestroyRenderer(renderer);
 
-    var dims: sdl.SDL_Rect = .{
-        .h = 1,
-        .w = 1,
-        .x = 0,
-        .y = 0,
-    };
+    const texture = sdl.SDL_CreateTexture(renderer, sdl.SDL_PIXELFORMAT_RGB24, sdl.SDL_TEXTUREACCESS_STATIC, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)));
+    defer sdl.SDL_DestroyTexture(texture);
 
-    var x: usize = 0;
-    var count: usize = 0;
-    while (x < height) : (x += 1) {
-        var y: usize = 0;
-        while (y < width) : (y += 1) {
-            const color = sdl.SDL_MapRGB(surface.?.*.format, @as(sdl.u_int8_t, @intCast(raw_buffer[count])), @as(sdl.u_int8_t, @intCast(raw_buffer[count + 1])), @as(sdl.u_int8_t, @intCast(raw_buffer[count + 2])));
-            count += 3;
-            dims.y = @as(c_int, @intCast(x));
-            dims.x = @as(c_int, @intCast(y));
-            _ = sdl.SDL_FillRect(surface, &dims, color);
-        }
-    }
-
-    _ = sdl.SDL_UpdateWindowSurface(&window.?.*);
+    _ = sdl.SDL_UpdateTexture(texture, null, raw_buffer.ptr, @as(c_int, @intCast(width * 3)));
 
     var quit = false;
     var event: sdl.SDL_Event = undefined;
@@ -43,9 +28,12 @@ pub fn show(raw_buffer: []u8, width: u32, height: u32) !void {
                 else => {},
             }
         }
+        _ = sdl.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        _ = sdl.SDL_RenderClear(renderer);
+        _ = sdl.SDL_RenderCopy(renderer, texture, null, null);
+        sdl.SDL_RenderPresent(renderer);
         sdl.SDL_Delay(10);
     }
 
-    sdl.SDL_DestroyWindow(window);
     sdl.SDL_Quit();
 }
