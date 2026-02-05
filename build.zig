@@ -4,6 +4,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const huffman = b.addModule("myConverter", .{
+        .root_source_file = b.path("src/huffman/root.zig"),
+        .target = target,
+    });
+
     const png = b.addModule("myConverter", .{
         .root_source_file = b.path("src/png_parser/root.zig"),
         .target = target,
@@ -23,6 +28,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/webp/root.zig"),
         .target = target,
     });
+    webp.addImport("huffman", huffman);
 
     const viewer = b.addModule("myConverter", .{
         .root_source_file = b.path("src/viewer/root.zig"),
@@ -41,6 +47,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "ppm", .module = ppm },
                 .{ .name = "webp", .module = webp },
                 .{ .name = "viewer", .module = viewer },
+                .{ .name = "huffman", .module = huffman },
             },
         }),
     });
