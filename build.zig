@@ -53,8 +53,36 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.linkLibC();
-    exe.linkSystemLibrary("z");
-    exe.linkSystemLibrary("SDL2");
+
+    switch (target.result.os.tag) {
+        .windows => {
+            const vcpkg_path = "C:/vcpkg/installed/x64-windows";
+
+            png.addIncludePath(.{ .cwd_relative = vcpkg_path ++ "/include" });
+            png.addLibraryPath(.{ .cwd_relative = vcpkg_path ++ "/lib" });
+            png.linkSystemLibrary("zlib", .{});
+
+            ppm.addIncludePath(.{ .cwd_relative = vcpkg_path ++ "/include" });
+            ppm.addLibraryPath(.{ .cwd_relative = vcpkg_path ++ "/lib" });
+            ppm.linkSystemLibrary("zlib", .{});
+
+            viewer.addIncludePath(.{ .cwd_relative = vcpkg_path ++ "/include" });
+            viewer.addLibraryPath(.{ .cwd_relative = vcpkg_path ++ "/lib" });
+            viewer.linkSystemLibrary("SDL2", .{});
+
+            exe.addIncludePath(.{ .cwd_relative = vcpkg_path ++ "/include" });
+            exe.addLibraryPath(.{ .cwd_relative = vcpkg_path ++ "/lib" });
+
+            exe.linkSystemLibrary("zlib");
+            exe.linkSystemLibrary("SDL2");
+        },
+        .linux => {
+            exe.linkSystemLibrary("z");
+            exe.linkSystemLibrary("SDL2");
+        },
+        else => std.debug.print("Not a valid OS\n", .{}),
+    }
+
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");
