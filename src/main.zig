@@ -1,26 +1,14 @@
 const std = @import("std");
+
+const jpeg_buffer = @import("jpeg_buffer");
+const png_parser = @import("png_parser");
+const ppm = @import("ppm");
+const viewer = @import("viewer");
+const webp = @import("webp");
+
 const zlib = @cImport({
     @cInclude("zlib.h");
 });
-const png_parser = @import("png_parser");
-const jpeg_buffer = @import("jpeg_buffer");
-const ppm = @import("ppm");
-const webp = @import("webp");
-const viewer = @import("viewer");
-
-// pub fn main() !void {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer _ = gpa.deinit();
-//
-//     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-//     defer arena.deinit();
-//     const allocator = arena.allocator();
-//
-//     var imageData = try webp.Decode.init(allocator, "input.webp");
-//     defer imageData.deinit();
-//
-//     imageData.getTypeofChunk();
-// }
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -31,14 +19,14 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     const args = std.process.argsAlloc(allocator) catch |err| {
-        std.debug.print("Error while allocating memory to arguments: {any}\n", .{err});
-        std.os.linux.exit(1);
+        std.log.err("Error while allocating memory to arguments: {any}", .{err});
+        std.process.exit(1);
     };
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 3) {
-        std.debug.print("Usage: convert <input_file> <output_file>\n", .{});
-        std.os.linux.exit(1);
+        std.log.err("Usage: convert <input_file> <output_file>", .{});
+        std.process.exit(1);
     } else {
         try converter(allocator, args[1], args[2]);
     }
@@ -79,14 +67,14 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
         }
     } else if (std.mem.endsWith(u8, input, ".ppm")) {
         var imageData = try ppm.PPMHeader.init(allocator, input);
-        std.debug.print("Returned the object\n", .{});
+        std.log.debug("Returned the object", .{});
         defer imageData.deinit();
 
         try imageData.parseHeader();
-        std.debug.print("Parded all the headers\n", .{});
+        std.log.debug("Parsed all the headers", .{});
 
         if (std.mem.endsWith(u8, output_filename, ".png")) {
-            std.debug.print("Encoding the PNG file\n", .{});
+            std.log.info("Encoding the PNG file", .{});
             const metadata = png_parser.PNGMetadata{
                 .height = imageData.height,
                 .width = imageData.width,
@@ -116,6 +104,27 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
 
             try imageData.parseHeader();
             try viewer.show(imageData.image_data, imageData.width, imageData.height);
+        }
+    } else if (std.mem.endsWith(u8, input, ".webp")) {
+        var imageData = try webp.Decode.init(allocator, input);
+        defer imageData.deinit();
+
+        try imageData.getTypeofChunk();
+        const data = imageData.image_data orelse return error.NoImageData;
+
+        if (std.mem.endsWith(u8, output_filename, ".png")) {
+            std.log.info("Encoding WebP to PNG", .{});
+            const metadata = png_parser.PNGMetadata{
+                .height = imageData.height,
+                .width = imageData.width,
+                .colorCode = data,
+            };
+            var pngEncoder = png_parser.PNGEncode.init(allocator, metadata);
+            try pngEncoder.parseToPNG(output_filename);
+        } else if (std.mem.endsWith(u8, output_filename, ".ppm")) {
+            std.log.info("Encoding WebP to PPM", .{});
+            var ppm_encoder = ppm.Encode.init(allocator, data, imageData.height, imageData.width);
+            try ppm_encoder.writeToFile(output_filename);
         }
     }
 }

@@ -1,5 +1,7 @@
 const std = @import("std");
+
 pub const dct = @import("dct.zig");
+
 const zlib = @cImport({
     @cInclude("zlib.h");
 });
@@ -127,7 +129,7 @@ pub const PNGDecode = struct {
             } else if (std.mem.eql(u8, chunk_type, "IEND")) {
                 break;
             } else {
-                std.debug.print("Skipping chunk: {s}\n", .{chunk_type});
+                std.log.warn("Skipping chunk: {s}", .{chunk_type});
             }
 
             self.cursor += length + 4;
@@ -136,12 +138,12 @@ pub const PNGDecode = struct {
 
     fn handlePLTE(self: *Self, data: []u8) !void {
         self.palette = try self.allocator.dupe(u8, data);
-        std.debug.print("Parsed PLTE: {} bytes\n", .{data.len});
+        std.log.debug("Parsed PLTE: {} bytes", .{data.len});
     }
 
     fn handleTRNS(self: *Self, data: []u8) !void {
         self.transparency = try self.allocator.dupe(u8, data);
-        std.debug.print("Parsed tRNS: {} bytes\n", .{data.len});
+        std.log.debug("Parsed tRNS: {} bytes", .{data.len});
     }
 
     fn handleIDAT(self: *Self, data: []u8) !void {
@@ -402,7 +404,7 @@ pub const PNGEncode = struct {
 
         const init_ret = zlib.deflateInit(&strm, zlib.Z_DEFAULT_COMPRESSION);
         if (init_ret != zlib.Z_OK) {
-            std.debug.print("Failed to initialize zlib: {d}\n", .{init_ret});
+            std.log.err("Failed to initialize zlib: {d}", .{init_ret});
         }
         defer _ = zlib.deflateEnd(&strm);
 
@@ -415,7 +417,7 @@ pub const PNGEncode = struct {
         const def_ret = zlib.deflate(&strm, zlib.Z_FINISH);
 
         if (def_ret != zlib.Z_STREAM_END) {
-            std.debug.print("Compression failed or buffer too small. Error: {d}\n", .{def_ret});
+            std.log.err("Compression failed or buffer too small. Error: {d}", .{def_ret});
             return;
         }
 

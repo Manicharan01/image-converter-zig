@@ -1,10 +1,11 @@
 const std = @import("std");
-const zlib = @cImport({
-    @cInclude("zlib.h");
-});
+
 const png = @import("png_parser");
 const PNGMetadata = png.PNGMetadata;
 
+const zlib = @cImport({
+    @cInclude("zlib.h");
+});
 const PPM_SIGNATURE = "P6";
 
 pub const PPMHeader = struct {
@@ -18,9 +19,8 @@ pub const PPMHeader = struct {
 
     pub fn init(allocator: std.mem.Allocator, filename: []const u8) !Self {
         const buffer = try std.fs.cwd().readFileAlloc(allocator, filename, 50 * 1024 * 1024);
-        std.debug.print("Opened the file\n", .{});
-
-        return .{
+        std.log.debug("Opened the file", .{});
+        return Self{
             .height = 0,
             .width = 0,
             .file_buffer = buffer,
