@@ -85,6 +85,14 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    const png_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "mypng",
+        .root_module = png,
+    });
+
+    b.installArtifact(png_lib);
+
     const run_step = b.step("run", "Run the app");
 
     const run_cmd = b.addRunArtifact(exe);
