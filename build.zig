@@ -4,35 +4,41 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const huffman = b.addModule("myConverter", .{
+    const huffman = b.addModule("huffman", .{
         .root_source_file = b.path("src/huffman/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
-    const png = b.addModule("myConverter", .{
+    const png = b.addModule("png", .{
         .root_source_file = b.path("src/png_parser/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
-    const jpeg = b.addModule("myConverter", .{
+    const jpeg = b.addModule("jpeg", .{
         .root_source_file = b.path("src/jpeg_buffer/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
-    const ppm = b.addModule("myConverter", .{
+    const ppm = b.addModule("ppm", .{
         .root_source_file = b.path("src/ppm/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
-    const webp = b.addModule("myConverter", .{
+    const webp = b.addModule("webp", .{
         .root_source_file = b.path("src/webp/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
     webp.addImport("huffman", huffman);
 
-    const viewer = b.addModule("myConverter", .{
+    const viewer = b.addModule("viewer", .{
         .root_source_file = b.path("src/viewer/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
     const exe = b.addExecutable(.{
