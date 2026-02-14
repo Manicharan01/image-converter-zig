@@ -262,6 +262,61 @@ pub const PNGDecode = struct {
         return output;
     }
 
+    pub fn convertToRGB(self: *Self, raw_pixels: []u8) ![]u8 {
+        const h = self.header orelse return error.NoHeader;
+        const rgb_buffer = try self.allocator.alloc(u8, h.width * h.height * 3);
+        errdefer self.allocator.free(rgb_buffer);
+
+        var bpp: u32 = 0;
+        switch (h.colorType) {
+            0 => bpp = 1,
+            2 => bpp = 3,
+            3 => bpp = 1,
+            4 => bpp = 2,
+            6 => bpp = 4,
+            else => return error.UnsupportedColorType,
+        }
+
+        var row: u32 = 0;
+        while (row < h.height) : (row += 1) {
+            var col: u32 = 0;
+            while (col < h.width) : (col += 1) {
+                const src_idx = (row * h.width * bpp) + (col * bpp);
+                const dst_idx = (row * h.width + col) * 3;
+
+                switch (h.colorType) {
+                    0, 4 => {
+                        const val = raw_pixels[src_idx];
+                        rgb_buffer[dst_idx] = val;
+                        rgb_buffer[dst_idx + 1] = val;
+                        rgb_buffer[dst_idx + 2] = val;
+                    },
+                    2, 6 => {
+                        rgb_buffer[dst_idx] = raw_pixels[src_idx];
+                        rgb_buffer[dst_idx + 1] = raw_pixels[src_idx + 1];
+                        rgb_buffer[dst_idx + 2] = raw_pixels[src_idx + 2];
+                    },
+                    3 => {
+                        if (self.palette) |pal| {
+                            const palette_idx = @as(usize, raw_pixels[src_idx]) * 3;
+                            if (palette_idx + 2 < pal.len) {
+                                rgb_buffer[dst_idx] = pal[palette_idx];
+                                rgb_buffer[dst_idx + 1] = pal[palette_idx + 1];
+                                rgb_buffer[dst_idx + 2] = pal[palette_idx + 2];
+                            }
+                        } else {
+                            rgb_buffer[dst_idx] = 0;
+                            rgb_buffer[dst_idx + 1] = 0;
+                            rgb_buffer[dst_idx + 2] = 0;
+                        }
+                    },
+                    else => unreachable,
+                }
+            }
+        }
+        return rgb_buffer;
+    }
+
     pub fn convertToYCbCr(self: *Self, raw_pixels: []u8) !YCbCrImage {
         const h = self.header orelse return error.NoHeader;
         // 1. Calculate Dimensions
@@ -385,12 +440,14 @@ pub const PNGEncode = struct {
         var pngBuffer = std.ArrayList(u8).empty;
         defer pngBuffer.deinit(self.allocator);
 
-        var count: u32 = 0;
+        const bytes_per_pixel = metadata.colorCode.len / (metadata.width * metadata.height);
+
         var i: usize = 0;
-        while (count < metadata.height) : (count += 1) {
-            const scanline = try std.mem.concat(self.allocator, u8, &.{ &.{0x00}, metadata.colorCode[i * 3 * metadata.width .. (i + 1) * 3 * metadata.width] });
+        while (i < metadata.height) : (i += 1) {
+            const scanline_data = metadata.colorCode[i * bytes_per_pixel * metadata.width .. (i + 1) * bytes_per_pixel * metadata.width];
+            const scanline = try std.mem.concat(self.allocator, u8, &.{ &.{0x00}, scanline_data });
+
             try pngBuffer.appendSlice(self.allocator, scanline);
-            i += 1;
         }
 
         const input = pngBuffer.items;

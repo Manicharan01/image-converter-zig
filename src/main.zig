@@ -61,8 +61,9 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
 
             try jpeg_buffer.writeJpegFile(output_filename, yCbCrImage.padded_width, yCbCrImage.padded_height, y_plane, cb_plane, cr_plane);
         } else if (std.mem.endsWith(u8, output_filename, ".ppm")) {
+            const rgb_pixels = try rawImage.convertToRGB(output);
             const header = rawImage.header orelse return error.NoHeader;
-            var ppm_encoder = ppm.Encode.init(allocator, output, header.height, header.width);
+            var ppm_encoder = ppm.Encode.init(allocator, rgb_pixels, header.height, header.width);
             try ppm_encoder.writeToFile(output_filename);
         }
     } else if (std.mem.endsWith(u8, input, ".ppm")) {
@@ -97,7 +98,9 @@ pub fn converter(allocator: std.mem.Allocator, input: []const u8, output_filenam
 
             const output = try rawImage.unfilter(raw_scanlines);
             defer allocator.free(output);
-            try viewer.show(output, header.width, header.height);
+            const rgb_pixels = try rawImage.convertToRGB(output);
+            defer allocator.free(rgb_pixels);
+            try viewer.show(rgb_pixels, header.width, header.height);
         } else if (std.mem.endsWith(u8, output_filename, ".ppm")) {
             var imageData = try ppm.PPMHeader.init(allocator, output_filename);
             defer imageData.deinit();
