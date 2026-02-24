@@ -455,4 +455,3 @@ pub const Decode = struct {
         return pixels;
     }
 };
-
