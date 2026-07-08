@@ -1,11 +1,8 @@
 const std = @import("std");
 
-const png = @import("png_parser");
+const png = @import("png");
 const PNGMetadata = png.PNGMetadata;
 
-const zlib = @cImport({
-    @cInclude("zlib.h");
-});
 const PPM_SIGNATURE = "P6";
 
 pub const PPMHeader = struct {
@@ -17,8 +14,8 @@ pub const PPMHeader = struct {
 
     const Self = @This();
 
-    pub fn init(allocator: std.mem.Allocator, filename: []const u8) !Self {
-        const buffer = try std.fs.cwd().readFileAlloc(allocator, filename, 50 * 1024 * 1024);
+    pub fn init(io: std.Io, allocator: std.mem.Allocator, filename: []const u8) !Self {
+        const buffer = try std.Io.Dir.cwd().readFileAlloc(io, filename, allocator, .unlimited);
         std.log.debug("Opened the file", .{});
         return Self{
             .height = 0,
@@ -35,20 +32,62 @@ pub const PPMHeader = struct {
     }
 
     pub fn parseHeader(self: *Self) !void {
-        if (!std.mem.eql(u8, PPM_SIGNATURE, self.file_buffer[0..2])) {
+        if (self.file_buffer.len < 2 or !std.mem.eql(u8, PPM_SIGNATURE, self.file_buffer[0..2])) {
             return error.InvalidPPMSignature;
         }
 
-        var i: usize = 3;
-        while (self.file_buffer[i] != ' ') : (i += 1) {}
-        const width_str = self.file_buffer[3..i];
-        self.width = try std.fmt.parseInt(u32, width_str, 10);
-        i += 1;
-        while (self.file_buffer[i] != '\n') : (i += 1) {}
-        const height_str = self.file_buffer[8..i];
-        self.height = try std.fmt.parseInt(u32, height_str, 10);
+        var idx: usize = 2;
 
-        self.image_data = self.file_buffer[i + 5 ..];
+        const Helper = struct {
+            fn skipWhitespaceAndComments(buf: []const u8, p_idx: *usize) !void {
+                while (p_idx.* < buf.len) {
+                    const c = buf[p_idx.*];
+                    if (c == ' ' or c == '\t' or c == '\n' or c == '\r') {
+                        p_idx.* += 1;
+                    } else if (c == '#') {
+                        // Skip comment until newline
+                        while (p_idx.* < buf.len and buf[p_idx.*] != '\n') {
+                            p_idx.* += 1;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            fn readInt(buf: []const u8, p_idx: *usize) !u32 {
+                try skipWhitespaceAndComments(buf, p_idx);
+                const start = p_idx.*;
+                while (p_idx.* < buf.len) {
+                    const c = buf[p_idx.*];
+                    if (c >= '0' and c <= '9') {
+                        p_idx.* += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if (start == p_idx.*) return error.InvalidPPMHeader;
+                return try std.fmt.parseInt(u32, buf[start..p_idx.*], 10);
+            }
+        };
+
+        self.width = try Helper.readInt(self.file_buffer, &idx);
+        self.height = try Helper.readInt(self.file_buffer, &idx);
+        _ = try Helper.readInt(self.file_buffer, &idx); // maxval
+
+        // The pixel data starts after exactly one whitespace character following maxval
+        if (idx < self.file_buffer.len) {
+            const c = self.file_buffer[idx];
+            if (c == ' ' or c == '\t' or c == '\n' or c == '\r') {
+                idx += 1;
+            } else {
+                return error.InvalidPPMHeader;
+            }
+        } else {
+            return error.InvalidPPMHeader;
+        }
+
+        self.image_data = self.file_buffer[idx..];
     }
 };
 
@@ -68,10 +107,7 @@ pub const Encode = struct {
         };
     }
 
-    pub fn writeToFile(self: *Self, output_filename: []const u8) !void {
-        const file = try std.fs.cwd().createFile(output_filename, .{});
-        defer file.close();
-
+    pub fn writeToFile(self: *Self, io: std.Io, output_filename: []const u8) !void {
         const width_str: []u8 = try std.fmt.allocPrint(self.allocator, "{}", .{self.width});
         defer self.allocator.free(width_str);
 
@@ -79,6 +115,6 @@ pub const Encode = struct {
         defer self.allocator.free(height_str);
 
         const file_data = try std.mem.concat(self.allocator, u8, &.{ "P6\n", width_str, " ", height_str, "\n", "255\n", self.image_data });
-        try file.writeAll(file_data);
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = output_filename, .data = file_data });
     }
 };
